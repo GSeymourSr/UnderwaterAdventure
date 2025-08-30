@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hidden Object Adventure Pro</title>
+  <style>
+    /* Reset and full screen styles */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    
+    /* --- ASPECT RATIO WRAPPER FOR RESPONSIVENESS --- */
+    body {
+        background: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    #aspect-ratio-wrapper {
+        position: relative;
+        width: 100vw;
+        height: 56.25vw; /* 16:9 aspect ratio */
+        max-height: 100vh;
+        max-width: 177.78vh; /* 16:9 -- 100 * 16 / 9 */
+    }
+
+    /* --- INITIAL CONTROLS & HIGH SCORES --- */
+    #initial-controls {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;
+      background: rgba(40, 40, 40, 0.98);
+      color: white; padding: 25px; border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      width: 90%; max-width: 600px;
+      display: flex; gap: 20px;
+    }
+    #setup-form { flex: 1; }
+    #initial-controls h2 { margin-bottom: 20px; text-align: center; }
+    #initial-controls .input-group { margin-bottom: 15px; }
+    #initial-controls label { display: block; margin-bottom: 5px; font-weight: bold; }
+    #initial-controls input[type="file"] { width: 100%; margin-bottom: 5px; }
+    #initial-controls .checkbox-label { font-size: 0.9em; font-weight: normal; display: inline-block; }
+    #initial-controls button { padding: 12px 20px; margin-top: 10px; width: 100%; font-size: 1.2em; background-color: #00aaff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+
+    /* High Score Display */
+    #high-scores { flex-basis: 200px; padding-left: 20px; border-left: 1px solid #555; }
+    #high-scores h3 { color: #ffeb3b; }
+    #high-scores ol { list-style-type: decimal; padding-left: 20px; }
+    #high-scores li { margin: 5px 0; }
+    #high-scores span { font-weight: bold; color: #fff; margin-right: 10px; }
+    
+    /* High Score Input Modal */
+    #name-input-modal {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 4000; background: rgba(20, 20, 20, 0.95);
+      color: white; padding: 30px; border-radius: 10px;
+      text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.7);
+      display: none; /* Initially hidden */
+    }
+    #name-input-modal h3 { margin-bottom: 15px; }
+    #name-input-modal input {
+      font-size: 2em; width: 100px; text-align: center; text-transform: uppercase;
+      margin-bottom: 20px; border: 2px solid #00aaff; background: #333; color: white;
+    }
+    #name-input-modal button { padding: 10px 20px; font-size: 1.1em; }
+
+    /* --- VIDEO & ANIMATED TITLE OVERLAYS --- */
+    #intro-video {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: black; z-index: 2000; object-fit: cover; display: none;
+    }
+    #title-page {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(45deg, #2c3e50, #fd746c, #ffb270, #2c3e50);
+      background-size: 400% 400%; z-index: 3000;
+      display: none; align-items: center; justify-content: center; text-align: center;
+      flex-direction: column; animation: gradientBG 15s ease infinite;
+    }
+    @keyframes gradientBG { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+    #title-page h1 { font-size: clamp(2.5em, 8vw, 6em); color: white; text-shadow: 4px 4px 10px rgba(0,0,0,0.6); animation: floatEffect 3s ease-in-out infinite; }
+    @keyframes floatEffect { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+    #title-page p { margin-top: 20px; font-size: 1.2em; color: rgba(255, 255, 255, 0.8); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+
+    /* --- MAIN GAME AREA & OBJECTS --- */
+    #game-container {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background-size: cover; background-position: center; cursor: crosshair;
+    }
+    .placed-object {
+      position: absolute; user-select: none; width: 100px;
+      transition: transform 0.5s ease, opacity 0.5s ease;
+    }
+    .placed-object.found-animated {
+      animation: spinAndFly 1s forwards ease-in-out;
+      pointer-events: none;
+    }
+    @keyframes spinAndFly {
+      0% { transform: scale(1.1) rotate(0deg); filter: drop-shadow(0 0 15px yellow); opacity: 1; }
+      100% { transform: scale(0) rotate(720deg) translateY(-600px); filter: drop-shadow(0 0 0 yellow); opacity: 0; }
+    }
+    /* Animated Mistake Feedback */
+    .mistake-x {
+      position: absolute; color: red; font-size: 8em;
+      font-weight: bold; text-shadow: 0 0 10px black;
+      pointer-events: none; user-select: none;
+      transform: translate(-50%, -50%); /* Center on cursor */
+      animation: fadeAndScaleOut 1s forwards;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .mistake-x .mistake-text { font-size: 0.2em; margin-top: -15px; }
+    @keyframes fadeAndScaleOut {
+      0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+    }
+
+    /* --- BOTTOM OBJECT GRID --- */
+    #object-grid {
+      position: absolute; bottom: 0; left:0; width: 100%;
+      background: rgba(20, 20, 20, 0.7); backdrop-filter: blur(5px);
+      display: flex; justify-content: space-evenly; flex-wrap: wrap;
+      padding: 10px 5px; z-index: 1500;
+    }
+    #object-grid.hints-available .grid-item:not(:has(.found-overlay)) { cursor: help; }
+    .grid-item {
+      position: relative; flex: 0 0 100px; height: 100px;
+      margin: 5px; border: 2px solid #ccc; border-radius: 4px; background-color: #333;
+    }
+    .grid-item img {
+      width: 100%; height: 100%; display: block; object-fit: contain;
+    }
+    .found-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      color: #ffeb3b; font-size: 5em; font-weight: bold; text-align: center;
+      line-height: 100px; pointer-events: none; text-shadow: 2px 2px 5px rgba(0,0,0,0.8);
+    }
+    
+    /* --- TOP GAME CONTROLS (ALWAYS VISIBLE) --- */
+    #game-controls {
+      position: absolute; top: 0; left: 0; width: 100%; z-index: 1100;
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 20px; background: rgba(20, 20, 20, 0.7);
+      backdrop-filter: blur(5px); padding: 10px 20px;
+    }
+    #game-controls .control-group { display: flex; align-items: center; gap: 10px; }
+    #game-controls button {
+      padding: 8px 15px; font-size: 1em; background-color: #555;
+      color: white; border: 1px solid #777; border-radius: 5px; cursor: pointer;
+    }
+    #game-controls button:hover { background-color: #777; }
+    .game-stat {
+      font-size: 1.2em; color: #ffeb3b; font-weight: bold;
+      text-shadow: 1px 1px 3px black; white-space: nowrap;
+    }
+    /* Bonus Round UI */
+    #bonus-ui {
+        display: none; /* Hidden by default */
+        text-align: center; color: white;
+    }
+    #bonus-ui img { height: 40px; vertical-align: middle; margin: 0 10px; border: 2px solid yellow; }
+  </style>
+</head>
+<body>
+
+  <div id="aspect-ratio-wrapper">
+    <audio id="sound-found" src="https://gseymour.com/demos/sounds/correct.mp3" preload="auto"></audio>
+    <audio id="sound-mistake" src="https://gseymour.com/demos/sounds/mistake.mp3" preload="auto"></audio>
+    <audio id="sound-win" src="https://gseymour.com/demos/sounds/win.mp3" preload="auto"></audio>
+
+    <div id="initial-controls">
+      <div id="setup-form">
+        <h2>Hidden Object Game Setup</h2>
+        <div class="input-group"><!-- Backgrounds --></div>
+        <div class="input-group"><!-- Hidden Objects --></div>
+        <div class="input-group"><!-- Decoys --></div>
+        <div class="input-group"><!-- Videos --></div>
+        <button id="start-btn">Start Game</button>
+      </div>
+      <div id="high-scores">
+        <h3>Fastest Times</h3>
+        <ol id="score-list"></ol>
+      </div>
+    </div>
+
+    <div id="name-input-modal">
+      <h3>New High Score!</h3>
+      <p>Enter your initials (3 letters):</p>
+      <input type="text" id="initials-input" maxlength="3">
+      <button id="submit-score-btn">Save Score</button>
+    </div>
+
+    <video id="intro-video" playsinline></video>
+    <div id="title-page">
+      <h1></h1>
+      <p id="skip-prompt"></p>
+    </div>
+    <div id="game-container"><div id="object-grid"></div></div>
+
+    <div id="game-controls">
+      <div class="control-group">
+        <div id="mistake-counter" class="game-stat">Mistakes: 0/5</div>
+        <div id="hint-counter" class="game-stat">Hints: 0</div>
+      </div>
+      <div id="bonus-ui"></div>
+      <div class="control-group">
+        <button id="fullscreen-btn">Fullscreen</button>
+        <button id="shuffle-bg">Shuffle Background</button>
+        <button id="shuffle-obj">Shuffle Objects</button>
+        <button id="shuffle-both">Shuffle Both</button>
+      </div>
+      <div id="timer" class="game-stat">Time: 0s</div>
+      <button id="change-dirs">Change Directories</button>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      // DOM Elements
+      const initialControls = document.getElementById('initial-controls');
+      const startBtn = document.getElementById('start-btn');
+      const highScoresList = document.getElementById('score-list');
+      const nameInputModal = document.getElementById('name-input-modal');
+      const initialsInput = document.getElementById('initials-input');
+      const submitScoreBtn = document.getElementById('submit-score-btn');
+      const introVideo = document.getElementById('intro-video');
+      const titlePage = document.getElementById('title-page');
+      const skipPrompt = document.getElementById('skip-prompt');
+      const gameContainer = document.getElementById('game-container');
+      const objectGrid = document.getElementById('object-grid');
+      const gameControls = document.getElementById('game-controls');
+      const mistakeCounter = document.getElementById('mistake-counter');
+      const hintCounter = document.getElementById('hint-counter');
+      const timerDisplay = document.getElementById('timer');
+      const bonusUI = document.getElementById('bonus-ui');
+      const fullscreenBtn = document.getElementById('fullscreen-btn');
+      const shuffleBgBtn = document.getElementById('shuffle-bg');
+      const shuffleObjBtn = document.getElementById('shuffle-obj');
+      const shuffleBothBtn = document.getElementById('shuffle-both');
+      const changeDirsBtn = document.getElementById('change-dirs');
+
+      // Audio Elements
+      const soundFound = document.getElementById('sound-found');
+      const soundMistake = document.getElementById('sound-mistake');
+      const soundWin = document.getElementById('sound-win');
+
+      // Game State
+      let bgFiles = [], objFiles = [], decoyFiles = [], videoFiles = [];
+      let availableObjIndexes = [];
+      const objectsPerRound = 10, decoysPerRound = 15, mistakesAllowed = 5;
+      let mistakeCount = 0;
+      let timerInterval;
+      let secondsElapsed = 0;
+      let currentScoreCallback = null;
+      let hintCount = 0;
+      let levelCount = 0;
+      let isBonusRound = false;
+
+      const winMessages = ["Great Job!", "Awesome!", "Level Complete!", "You're a Star!", "On to the Next!"];
+
+      const setupForm = document.getElementById('setup-form');
+      const inputs = [
+          {id: 'bg', label: 'Backgrounds', type: 'image/'},
+          {id: 'obj', label: 'Hidden Objects (Find These)', type: 'image/'},
+          {id: 'decoy', label: 'Decoy Objects (Distractions)', type: 'image/'},
+          {id: 'video', label: 'Intro/Interlude Videos (.mp4)', type: 'video/'},
+      ];
+      inputs.forEach((i, index) => {
+          const group = setupForm.querySelector(`.input-group:nth-child(${index + 2})`);
+          group.innerHTML = `
+              <label for="${i.id}-input">${i.label}:</label>
+              <input type="file" id="${i.id}-input" webkitdirectory multiple>
+              <input type="checkbox" id="${i.id}-recursive-check" checked>
+              <label class="checkbox-label" for="${i.id}-recursive-check">Include Subdirectories</label>
+          `;
+      });
+      
+      // --- HELPER FUNCTIONS ---
+      function playSound(soundElement) {
+        soundElement.currentTime = 0;
+        soundElement.play().catch(e => console.log("Sound play failed:", e));
+      }
+      function loadFiles(id, typeStartsWith) {
+        const input = document.getElementById(`${id}-input`);
+        const checkbox = document.getElementById(`${id}-recursive-check`);
+        const allFiles = Array.from(input.files).filter(file => file.type.startsWith(typeStartsWith));
+        if (checkbox.checked || !input.webkitdirectory) return allFiles;
+        return allFiles.filter(file => file.webkitRelativePath.split('/').length <= 2);
+      }
+      function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+      }
+      function goFullscreen() {
+        const docElm = document.documentElement;
+        if (docElm.requestFullscreen) docElm.requestFullscreen();
+        else if (docElm.webkitRequestFullscreen) docElm.webkitRequestFullscreen();
+      }
+
+      function getRoundHiddenObjects() {
+        if (availableObjIndexes.length < objectsPerRound) {
+          availableObjIndexes = objFiles.map((_, i) => i);
+          shuffleArray(availableObjIndexes);
+        }
+        const roundFiles = [];
+        for (let i = 0; i < objectsPerRound; i++) {
+          if (availableObjIndexes.length > 0) {
+            roundFiles.push(objFiles[availableObjIndexes.pop()]);
+          }
+        }
+        return roundFiles;
+      }
+      function getDecoyObjects() {
+        shuffleArray(decoyFiles);
+        return decoyFiles.slice(0, decoysPerRound);
+      }
+      
+      // --- TIMER & HIGH SCORE FUNCTIONS ---
+      function startTimer() {
+        stopTimer();
+        secondsElapsed = 0;
+        timerDisplay.textContent = `Time: ${secondsElapsed}s`;
+        timerInterval = setInterval(() => {
+          secondsElapsed++;
+          timerDisplay.textContent = `Time: ${secondsElapsed}s`;
+        }, 1000);
+      }
+      function stopTimer() { clearInterval(timerInterval); }
+      function getHighScores() { return JSON.parse(localStorage.getItem('hiddenObjectHighScores')) || []; }
+      function saveHighScores(scores) {
+        scores.sort((a, b) => a.time - b.time);
+        const top10 = scores.slice(0, 10);
+        localStorage.setItem('hiddenObjectHighScores', JSON.stringify(top10));
+        displayHighScores();
+      }
+      function displayHighScores() {
+        const scores = getHighScores();
+        highScoresList.innerHTML = scores.map(s => `<li><span>${s.name}</span> ${s.time}s</li>`).join('');
+        if (scores.length === 0) highScoresList.innerHTML = '<li>No scores yet!</li>';
+      }
+      function checkHighScore(time, onComplete) {
+        const scores = getHighScores();
+        if (scores.length < 10 || time < scores[scores.length - 1].time) {
+          nameInputModal.style.display = 'block';
+          initialsInput.focus();
+          currentScoreCallback = () => {
+            const name = initialsInput.value.trim().toUpperCase() || '???';
+            scores.push({ name, time });
+            saveHighScores(scores);
+            nameInputModal.style.display = 'none';
+            initialsInput.value = '';
+            onComplete();
+          };
+        } else {
+          onComplete();
+        }
+      }
+      
+      // --- CORE GAME FLOW FUNCTIONS ---
+      function playInterludeVideo(callback) {
+        if (videoFiles.length > 0) {
+          let hasFinished = false;
+          const finishVideo = () => {
+            if (hasFinished) return;
+            hasFinished = true;
+            introVideo.style.display = 'none'; introVideo.pause();
+            URL.revokeObjectURL(introVideo.src);
+            document.removeEventListener('keydown', handleSkipKey);
+            callback();
+          };
+          const handleSkipKey = (e) => { if (e.code === 'Space') { e.preventDefault(); finishVideo(); } };
+          const videoUrl = URL.createObjectURL(shuffleArray(videoFiles)[0]);
+          introVideo.src = videoUrl; introVideo.style.display = 'block';
+          introVideo.onended = finishVideo;
+          introVideo.onerror = (e) => {
+            console.error("Video Error:", e); alert("Could not play the selected video file. Skipping.");
+            finishVideo();
+          };
+          document.addEventListener('keydown', handleSkipKey);
+          const playPromise = introVideo.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(error => {
+              console.error("Video Autoplay Error:", error); alert("Video could not autoplay. Skipping.");
+              finishVideo();
+            });
+          }
+        } else {
+          callback();
+        }
+      }
+
+      function showTitlePage(message, callback, showSkip = false) {
+        titlePage.querySelector('h1').textContent = message;
+        skipPrompt.textContent = showSkip ? "Press Space to Skip" : "";
+        titlePage.style.display = 'flex';
+        setTimeout(() => {
+          titlePage.style.display = 'none';
+          callback();
+        }, 2500);
+      }
+
+      function setRandomBackground() {
+        if (bgFiles.length === 0) return;
+        const randomBgFile = bgFiles[Math.floor(Math.random() * bgFiles.length)];
+        const bgUrl = URL.createObjectURL(randomBgFile);
+        gameContainer.style.backgroundImage = `url('${bgUrl}')`;
+      }
+      function updateMistakeCounter() {
+        mistakeCounter.textContent = `Mistakes: ${mistakeCount}/${mistakesAllowed}`;
+        mistakeCounter.style.color = (mistakeCount >= mistakesAllowed) ? '#ff4d4d' : '#ffeb3b';
+      }
+      function updateHintCounter() {
+        hintCounter.textContent = `Hints: ${hintCount}`;
+        objectGrid.classList.toggle('hints-available', hintCount > 0);
+      }
+      function handleMistake(e) {
+        if (isBonusRound || mistakeCount >= mistakesAllowed) return;
+        playSound(soundMistake);
+        
+        // Animated Red X
+        const x = document.createElement('div');
+        x.classList.add('mistake-x');
+        x.innerHTML = `X <span class="mistake-text">${mistakesAllowed - (mistakeCount + 1)} left</span>`;
+        x.style.left = `${e.clientX - gameContainer.getBoundingClientRect().left}px`;
+        x.style.top = `${e.clientY - gameContainer.getBoundingClientRect().top}px`;
+        gameContainer.appendChild(x);
+        setTimeout(() => x.remove(), 1000);
+
+        mistakeCount++;
+        updateMistakeCounter();
+        if (mistakeCount >= mistakesAllowed) {
+            stopTimer();
+            setTimeout(() => {
+                alert("Game Over! Too many mistakes. Starting a new round.");
+                loadNewRound();
+            }, 100);
+        }
+      }
+
+      function placeObjectsAndGrid() {
+        isBonusRound = false;
+        document.querySelectorAll('.placed-object, .mistake-x').forEach(el => el.remove());
+        objectGrid.innerHTML = '';
+        mistakeCount = 0;
+        updateMistakeCounter();
+        updateHintCounter();
+        startTimer();
+
+        const realObjFiles = getRoundHiddenObjects();
+        const decoyObjFiles = getDecoyObjects();
+        
+        let objectsToPlace = [
+            ...realObjFiles.map(file => ({ file, isReal: true })),
+            ...decoyObjFiles.map(file => ({ file, isReal: false }))
+        ];
+        shuffleArray(objectsToPlace);
+
+        const containerRect = gameContainer.getBoundingClientRect();
+        const safeHeight = containerRect.height - 150;
+        let foundCount = 0;
+
+        function checkRoundComplete() {
+          if (foundCount >= realObjFiles.length) {
+            stopTimer();
+            playSound(soundWin);
+            levelCount++;
+            hintCount++;
+            updateHintCounter();
+            
+            const roundCompleteContinuation = () => {
+              if (levelCount % 3 === 0) {
+                 startBonusRound();
+              } else {
+                const randomMessage = winMessages[Math.floor(Math.random() * winMessages.length)];
+                showTitlePage(randomMessage, () => playInterludeVideo(loadNewRound));
+              }
+            };
+            checkHighScore(secondsElapsed, roundCompleteContinuation);
+          }
+        }
+
+        objectsToPlace.forEach(obj => {
+          const objUrl = URL.createObjectURL(obj.file);
+          const imgElem = document.createElement('img');
+          imgElem.src = objUrl;
+          imgElem.classList.add('placed-object');
+          imgElem.dataset.filename = obj.file.name;
+          
+          const maxX = containerRect.width - 100;
+          const maxY = safeHeight - 100;
+          imgElem.style.left = `${Math.floor(Math.random() * (maxX > 0 ? maxX : 1))}px`;
+          imgElem.style.top = `${Math.floor(Math.random() * (maxY > 0 ? maxY : 1))}px`;
+          
+          imgElem.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (imgElem.classList.contains('found-animated')) return;
+            if (obj.isReal) {
+              playSound(soundFound);
+              imgElem.classList.add('found-animated');
+              
+              const gridItem = document.querySelector(`.grid-item[data-filename="${obj.file.name}"]`);
+              if (gridItem && !gridItem.querySelector('.found-overlay')) {
+                  const overlay = document.createElement('span');
+                  overlay.classList.add('found-overlay');
+                  overlay.textContent = "X";
+                  gridItem.appendChild(overlay);
+              }
+              foundCount++;
+              setTimeout(checkRoundComplete, 500);
+            } else {
+              handleMistake(e);
+            }
+          });
+          gameContainer.appendChild(imgElem);
+        });
+
+        realObjFiles.forEach(objFile => {
+            const gridItem = document.createElement('div');
+            gridItem.classList.add('grid-item');
+            gridItem.dataset.filename = objFile.name;
+            const gridImg = document.createElement('img');
+            gridImg.src = URL.createObjectURL(objFile);
+            gridItem.appendChild(gridImg);
+            gridItem.addEventListener('click', () => {
+                if (hintCount > 0 && !gridItem.querySelector('.found-overlay')) {
+                    hintCount--;
+                    updateHintCounter();
+                    const targetObject = document.querySelector(`.placed-object[data-filename="${objFile.name}"]`);
+                    if (targetObject) targetObject.click();
+                }
+            });
+            objectGrid.appendChild(gridItem);
+        });
+      }
+
+      function startBonusRound() {
+        showTitlePage("BONUS ROUND!", () => {
+            isBonusRound = true;
+            document.querySelectorAll('.placed-object').forEach(el => el.remove());
+            objectGrid.innerHTML = '';
+            setRandomBackground();
+
+            const bonusObjectFile = objFiles[Math.floor(Math.random() * objFiles.length)];
+            const bonusObjectUrl = URL.createObjectURL(bonusObjectFile);
+            let bonusFoundCount = 0;
+            
+            bonusUI.innerHTML = `Find as many <img src="${bonusObjectUrl}"> as you can!`;
+            bonusUI.style.display = 'block';
+            mistakeCounter.style.display = 'none';
+
+            const containerRect = gameContainer.getBoundingClientRect();
+            const safeHeight = containerRect.height - 150;
+
+            for (let i = 0; i < 30; i++) {
+                const imgElem = document.createElement('img');
+                imgElem.src = bonusObjectUrl;
+                imgElem.classList.add('placed-object');
+                const maxX = containerRect.width - 100;
+                const maxY = safeHeight - 100;
+                imgElem.style.left = `${Math.floor(Math.random() * (maxX > 0 ? maxX : 1))}px`;
+                imgElem.style.top = `${Math.floor(Math.random() * (maxY > 0 ? maxY : 1))}px`;
+                imgElem.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (imgElem.classList.contains('found-animated')) return;
+                    playSound(soundFound);
+                    bonusFoundCount++;
+                    imgElem.classList.add('found-animated');
+                    bonusUI.innerHTML = `Found: ${bonusFoundCount}`;
+                });
+                gameContainer.appendChild(imgElem);
+            }
+
+            let bonusTime = 30;
+            timerDisplay.textContent = `Time: ${bonusTime}s`;
+            const bonusTimer = setInterval(() => {
+                bonusTime--;
+                timerDisplay.textContent = `Time: ${bonusTime}s`;
+                if (bonusTime <= 0) {
+                    clearInterval(bonusTimer);
+                    endBonusRound(bonusFoundCount);
+                }
+            }, 1000);
+        });
+      }
+
+      function endBonusRound(foundCount) {
+        bonusUI.style.display = 'none';
+        mistakeCounter.style.display = 'flex';
+        playSound(soundWin);
+        showTitlePage(`You found ${foundCount} items!`, () => {
+            playInterludeVideo(loadNewRound);
+        });
+      }
+      
+      function loadNewRound() { setRandomBackground(); placeObjectsAndGrid(); }
+      
+      function showDirectoryControls() {
+        initialControls.style.display = 'flex';
+        stopTimer();
+        if (document.fullscreenElement) document.exitFullscreen();
+      }
+
+      // --- EVENT LISTENERS ---
+      
+      startBtn.addEventListener('click', () => {
+        bgFiles = loadFiles('bg', "image/");
+        objFiles = loadFiles('obj', "image/");
+        decoyFiles = loadFiles('decoy', "image/");
+        videoFiles = loadFiles('video', "video/");
+
+        if (bgFiles.length === 0 || objFiles.length < objectsPerRound || decoyFiles.length < decoysPerRound) {
+          alert(`Please select at least:\n- 1 Background Image\n- ${objectsPerRound} Hidden Object Images\n- ${decoysPerRound} Decoy Images`);
+          return;
+        }
+        availableObjIndexes = objFiles.map((_, i) => i);
+        shuffleArray(availableObjIndexes);
+        levelCount = 0;
+        hintCount = 0;
+
+        initialControls.style.display = 'none';
+        goFullscreen();
+
+        playInterludeVideo(() => {
+          showTitlePage("Hidden Object Adventure Pro", loadNewRound, true);
+        });
+      });
+
+      submitScoreBtn.addEventListener('click', () => { if (currentScoreCallback) currentScoreCallback(); });
+      initialsInput.addEventListener('keyup', (e) => { if (e.key === 'Enter' && currentScoreCallback) currentScoreCallback(); });
+      gameContainer.addEventListener('click', (e) => { if (e.target === gameContainer) handleMistake(e); });
+      
+      fullscreenBtn.addEventListener('click', goFullscreen);
+      shuffleBgBtn.addEventListener('click', setRandomBackground);
+      shuffleObjBtn.addEventListener('click', placeObjectsAndGrid);
+      shuffleBothBtn.addEventListener('click', loadNewRound);
+      changeDirsBtn.addEventListener('click', showDirectoryControls);
+      
+      // Initialize
+      displayHighScores();
+    })();
+  </script>
+</body>
+</html>
