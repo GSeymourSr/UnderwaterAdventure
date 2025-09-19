@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Hidden Object Adventure Pro</title>
+  <style>
+    /* Reset and full screen styles */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    
+    /* --- ASPECT RATIO WRAPPER FOR RESPONSIVENESS --- */
+    body {
+        background: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    #aspect-ratio-wrapper {
+        position: relative;
+        width: 100vw;
+        height: 56.25vw; /* 16:9 aspect ratio */
+        max-height: 100vh;
+        max-width: 177.78vh; /* 16:9 -- 100 * 16 / 9 */
+    }
+
+    /* --- INITIAL CONTROLS & HIGH SCORES --- */
+    #initial-controls {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;
+      background: rgba(40, 40, 40, 0.98);
+      color: white; padding: 25px; border-radius: 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      width: 90%; max-width: 600px;
+      display: flex; gap: 20px;
+    }
+    #start-panel { 
+        flex: 1; text-align: center;
+    }
+    #initial-controls h2 { margin-bottom: 20px; text-align: center; }
+    #initial-controls p { margin-bottom: 25px; color: #ccc; }
+    #initial-controls button { 
+        padding: 15px 30px; 
+        width: 80%; 
+        font-size: 1.5em; 
+        background-color: #00aaff; 
+        color: white; 
+        border: none; 
+        border-radius: 8px; 
+        cursor: pointer; 
+        transition: background-color 0.3s;
+    }
+    #initial-controls button:hover { background-color: #0088cc; }
+
+    /* High Score Display */
+    #high-scores { flex-basis: 200px; padding-left: 20px; border-left: 1px solid #555; }
+    #high-scores h3 { color: #ffeb3b; }
+    #high-scores ol { list-style-type: decimal; padding-left: 20px; }
+    #high-scores li { margin: 5px 0; }
+    #high-scores span { font-weight: bold; color: #fff; margin-right: 10px; }
+    
+    /* High Score Input Modal */
+    #name-input-modal {
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 4000; background: rgba(20, 20, 20, 0.95);
+      color: white; padding: 30px; border-radius: 10px;
+      text-align: center; box-shadow: 0 0 40px rgba(0,0,0,0.7);
+      display: none; /* Initially hidden */
+    }
+    #name-input-modal h3 { margin-bottom: 15px; }
+    #name-input-modal input {
+      font-size: 2em; width: 100px; text-align: center; text-transform: uppercase;
+      margin-bottom: 20px; border: 2px solid #00aaff; background: #333; color: white;
+    }
+    #name-input-modal button { padding: 10px 20px; font-size: 1.1em; }
+
+    /* --- VIDEO & ANIMATED TITLE OVERLAYS --- */
+    #intro-video {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: black; z-index: 2000; object-fit: cover; display: none;
+    }
+    #title-page {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: linear-gradient(45deg, #2c3e50, #fd746c, #ffb270, #2c3e50);
+      background-size: 400% 400%; z-index: 3000;
+      display: none; align-items: center; justify-content: center; text-align: center;
+      flex-direction: column; animation: gradientBG 15s ease infinite;
+    }
+    @keyframes gradientBG { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+    #title-page h1 { font-size: clamp(2.5em, 8vw, 6em); color: white; text-shadow: 4px 4px 10px rgba(0,0,0,0.6); animation: floatEffect 3s ease-in-out infinite; }
+    @keyframes floatEffect { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+    #title-page p { margin-top: 20px; font-size: 1.2em; color: rgba(255, 255, 255, 0.8); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+
+    /* --- MAIN GAME AREA & OBJECTS --- */
+    #game-container {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background-size: cover; background-position: center; cursor: crosshair;
+    }
+    .placed-object {
+      position: absolute; user-select: none; width: 100px;
+      transition: transform 0.5s ease, opacity 0.5s ease;
+    }
+    .placed-object.found-animated {
+      animation: spinAndFly 1s forwards ease-in-out;
+      pointer-events: none;
+    }
+    @keyframes spinAndFly {
+      0% { transform: scale(1.1) rotate(0deg); filter: drop-shadow(0 0 15px yellow); opacity: 1; }
+      100% { transform: scale(0) rotate(720deg) translateY(-600px); filter: drop-shadow(0 0 0 yellow); opacity: 0; }
+    }
+    /* Animated Mistake Feedback */
+    .mistake-x {
+      position: absolute; color: red; font-size: 8em;
+      font-weight: bold; text-shadow: 0 0 10px black;
+      pointer-events: none; user-select: none;
+      transform: translate(-50%, -50%); /* Center on cursor */
+      animation: fadeAndScaleOut 1s forwards;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .mistake-x .mistake-text { font-size: 0.2em; margin-top: -15px; }
+    @keyframes fadeAndScaleOut {
+      0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1.5); opacity: 0; }
+    }
+
+    /* --- BOTTOM OBJECT GRID --- */
+    #object-grid {
+      position: absolute; bottom: 0; left:0; width: 100%;
+      background: rgba(20, 20, 20, 0.7); backdrop-filter: blur(5px);
+      display: flex; justify-content: space-evenly; flex-wrap: wrap;
+      padding: 10px 5px; z-index: 1500;
+    }
+    #object-grid.hints-available .grid-item:not(:has(.found-overlay)) { cursor: help; }
+    .grid-item {
+      position: relative; flex: 0 0 100px; height: 100px;
+      margin: 5px; border: 2px solid #ccc; border-radius: 4px; background-color: #333;
+    }
+    .grid-item img {
+      width: 100%; height: 100%; display: block; object-fit: contain;
+    }
+    .found-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      color: #ffeb3b; font-size: 5em; font-weight: bold; text-align: center;
+      line-height: 100px; pointer-events: none; text-shadow: 2px 2px 5px rgba(0,0,0,0.8);
+    }
+    
+    /* --- TOP GAME CONTROLS (ALWAYS VISIBLE) --- */
+    #game-controls {
+      position: absolute; top: 0; left: 0; width: 100%; z-index: 1100;
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 20px; background: rgba(20, 20, 20, 0.7);
+      backdrop-filter: blur(5px); padding: 10px 20px;
+    }
+    #game-controls .control-group { display: flex; align-items: center; gap: 10px; }
+    #game-controls button {
+      padding: 8px 15px; font-size: 1em; background-color: #555;
+      color: white; border: 1px solid #777; border-radius: 5px; cursor: pointer;
+    }
+    #game-controls button:hover { background-color: #777; }
+    .game-stat {
+      font-size: 1.2em; color: #ffeb3b; font-weight: bold;
+      text-shadow: 1px 1px 3px black; white-space: nowrap;
+    }
+    /* Bonus Round UI */
+    #bonus-ui {
+        display: none; /* Hidden by default */
+        text-align: center; color: white;
+    }
+    #bonus-ui img { height: 40px; vertical-align: middle; margin: 0 10px; border: 2px solid yellow; }
+  </style>
+</head>
+<body>
+
+  <div id="aspect-ratio-wrapper">
+    <audio id="sound-found" src="https://gseymour.com/demos/sounds/correct.mp3" preload="auto"></audio>
+    <audio id="sound-mistake" src="https://gseymour.com/demos/sounds/mistake.mp3" preload="auto"></audio>
+    <audio id="sound-win" src="https://gseymour.com/demos/sounds/win.mp3" preload="auto"></audio>
+
+    <div id="initial-controls">
+      <div id="start-panel">
+        <h2>Underwater Adventure</h2>
+        <p>Find the hidden objects shown at the bottom of the screen. Good luck!</p>
+        <button id="start-btn">Start Game</button>
+      </div>
+      <div id="high-scores">
+        <h3>Fastest Times</h3>
+        <ol id="score-list"></ol>
+      </div>
+    </div>
+
+    <div id="name-input-modal">
+      <h3>New High Score!</h3>
+      <p>Enter your initials (3 letters):</p>
+      <input type="text" id="initials-input" maxlength="3">
+      <button id="submit-score-btn">Save Score</button>
+    </div>
+
+    <video id="intro-video" playsinline></video>
+    <div id="title-page">
+      <h1></h1>
+      <p id="skip-prompt"></p>
+    </div>
+    <div id="game-container"><div id="object-grid"></div></div>
+
+    <div id="game-controls">
+      <div class="control-group">
+        <div id="mistake-counter" class="game-stat">Mistakes: 0/5</div>
+        <div id="hint-counter" class="game-stat">Hints: 0</div>
+      </div>
+      <div id="bonus-ui"></div>
+      <div class="control-group">
+        <button id="fullscreen-btn">Fullscreen</button>
+        <button id="shuffle-bg">Shuffle Background</button>
+        <button id="shuffle-obj">Shuffle Objects</button>
+        <button id="shuffle-both">Shuffle Both</button>
+      </div>
+      <div id="timer" class="game-stat">Time: 0s</div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      // --- START: HARD-CODED FILE LISTS ---
+      // These paths were auto-generated by a Python script on 2025-09-18 22:01:31
+      const backgroundPaths = [
+        "backgrounds/bg (1).jpeg",
+        "backgrounds/bg (10).jpeg",
+        "backgrounds/bg (2).jpeg",
+        "backgrounds/bg (3).jpeg",
+        "backgrounds/bg (4).jpeg",
+        "backgrounds/bg (5).jpeg",
+        "backgrounds/bg (6).jpeg",
+        "backgrounds/bg (7).jpeg",
+        "backgrounds/bg (8).jpeg",
+        "backgrounds/bg (9).jpeg"
+      ];
+      const videoPaths = [
+        "videos/Hailuo_Video_423851228295090182_cropped_converted.mp4",
+        "videos/Hailuo_Video_Lighting_ Slight ripple distor_423862595639070729_cropped_converted.mp4",
+        "videos/Professional_Mode_the_monster_summons_you_forward - Trim_cropped_converted.mp4",
+        "videos/aaa (1)_converted.mp4",
+        "videos/aaa (2)_converted.mp4",
+        "videos/aaa (3)_converted.mp4",
+        "videos/aaa (4)_converted.mp4",
+        "videos/aaa (5)_converted.mp4",
+        "videos/v (2).mp4",
+        "videos/v (3).mp4",
+        "videos/v (4).mp4",
+        "videos/v (7).mp4",
+        "videos/vv (4).mp4"
+      ];
+      // Using fish for both hidden objects and decoys
+      const fishPaths = [
+        "fish/fishleft (1).png",
+        "fish/fishleft (10).png",
+        "fish/fishleft (100).png",
+        "fish/fishleft (101).png",
+        "fish/fishleft (102).png",
+        "fish/fishleft (103).png",
+        "fish/fishleft (104).png",
+        "fish/fishleft (105).png",
+        "fish/fishleft (106).png",
+        "fish/fishleft (107).png",
+        "fish/fishleft (108).png",
+        "fish/fishleft (109).png",
+        "fish/fishleft (11).png",
+        "fish/fishleft (110).png",
+        "fish/fishleft (111).png",
+        "fish/fishleft (112).png",
+        "fish/fishleft (113).png",
+        "fish/fishleft (114).png",
+        "fish/fishleft (115).png",
+        "fish/fishleft (116).png",
+        "fish/fishleft (117).png",
+        "fish/fishleft (118).png",
+        "fish/fishleft (119).png",
+        "fish/fishleft (12).png",
+        "fish/fishleft (120).png",
+        "fish/fishleft (121).png",
+        "fish/fishleft (122).png",
+        "fish/fishleft (123).png",
+        "fish/fishleft (124).png",
+        "fish/fishleft (125).png",
+        "fish/fishleft (126).png",
+        "fish/fishleft (127).png",
+        "fish/fishleft (128).png",
+        "fish/fishleft (129).png",
+        "fish/fishleft (13).png",
+        "fish/fishleft (130).png",
+        "fish/fishleft (131).png",
+        "fish/fishleft (132).png",
+        "fish/fishleft (133).png",
+        "fish/fishleft (134).png",
+        "fish/fishleft (135).png",
+        "fish/fishleft (136).png",
+        "fish/fishleft (137).png",
+        "fish/fishleft (138).png",
+        "fish/fishleft (139).png",
+        "fish/fishleft (14).png",
+        "fish/fishleft (140).png",
+        "fish/fishleft (141).png",
+        "fish/fishleft (142).png",
+        "fish/fishleft (143).png",
+        "fish/fishleft (144).png",
+        "fish/fishleft (145).png",
+        "fish/fishleft (146).png",
+        "fish/fishleft (147).png",
+        "fish/fishleft (148).png",
+        "fish/fishleft (149).png",
+        "fish/fishleft (15).png",
+        "fish/fishleft (150).png",
+        "fish/fishleft (151).png",
+        "fish/fishleft (152).png",
+        "fish/fishleft (153).png",
+        "fish/fishleft (154).png",
+        "fish/fishleft (155).png",
+        "fish/fishleft (156).png",
+        "fish/fishleft (157).png",
+        "fish/fishleft (158).png",
+        "fish/fishleft (159).png",
+        "fish/fishleft (16).png",
+        "fish/fishleft (160).png",
+        "fish/fishleft (161).png",
+        "fish/fishleft (162).png",
+        "fish/fishleft (163).png",
+        "fish/fishleft (164).png",
+        "fish/fishleft (165).png",
+        "fish/fishleft (166).png",
+        "fish/fishleft (167).png",
+        "fish/fishleft (168).png",
+        "fish/fishleft (169).png",
+        "fish/fishleft (17).png",
+        "fish/fishleft (170).png",
+        "fish/fishleft (171).png",
+        "fish/fishleft (172).png",
+        "fish/fishleft (173).png",
+        "fish/fishleft (174).png",
+        "fish/fishleft (175).png",
+        "fish/fishleft (176).png",
+        "fish/fishleft (177).png",
+        "fish/fishleft (178).png",
+        "fish/fishleft (179).png",
+        "fish/fishleft (18).png",
+        "fish/fishleft (180).png",
+        "fish/fishleft (181).png",
+        "fish/fishleft (182).png",
+        "fish/fishleft (183).png",
+        "fish/fishleft (184).png",
+        "fish/fishleft (185).png",
+        "fish/fishleft (186).png",
+        "fish/fishleft (187).png",
+        "fish/fishleft (188).png",
+        "fish/fishleft (189).png",
+        "fish/fishleft (19).png",
+        "fish/fishleft (190).png",
+        "fish/fishleft (191).png",
+        "fish/fishleft (192).png",
+        "fish/fishleft (193).png",
+        "fish/fishleft (194).png",
+        "fish/fishleft (195).png",
+        "fish/fishleft (196).png",
+        "fish/fishleft (197).png",
+        "fish/fishleft (198).png",
+        "fish/fishleft (199).png",
+        "fish/fishleft (2).png",
+        "fish/fishleft (20).png",
+        "fish/fishleft (200).png",
+        "fish/fishleft (201).png",
+        "fish/fishleft (202).png",
+        "fish/fishleft (203).png",
+        "fish/fishleft (204).png",
+        "fish/fishleft (205).png",
+        "fish/fishleft (206).png",
+        "fish/fishleft (207).png",
+        "fish/fishleft (208).png",
+        "fish/fishleft (209).png",
+        "fish/fishleft (21).png",
+        "fish/fishleft (210).png",
+        "fish/fishleft (211).png",
+        "fish/fishleft (212).png",
+        "fish/fishleft (213).png",
+        "fish/fishleft (214).png",
+        "fish/fishleft (215).png",
+        "fish/fishleft (216).png",
+        "fish/fishleft (217).png",
+        "fish/fishleft (218).png",
+        "fish/fishleft (219).png",
+        "fish/fishleft (22).png",
+        "fish/fishleft (220).png",
+        "fish/fishleft (221).png",
+        "fish/fishleft (222).png",
+        "fish/fishleft (223).png",
+        "fish/fishleft (224).png",
+        "fish/fishleft (225).png",
+        "fish/fishleft (226).png",
+        "fish/fishleft (227).png",
+        "fish/fishleft (228).png",
+        "fish/fishleft (229).png",
+        "fish/fishleft (23).png",
+        "fish/fishleft (230).png",
+        "fish/fishleft (231).png",
+        "fish/fishleft (232).png",
+        "fish/fishleft (233).png",
+        "fish/fishleft (234).png",
+        "fish/fishleft (235).png",
+        "fish/fishleft (236).png",
+        "fish/fishleft (237).png",
+        "fish/fishleft (238).png",
+        "fish/fishleft (239).png",
+        "fish/fishleft (24).png",
+        "fish/fishleft (240).png",
+        "fish/fishleft (241).png",
+        "fish/fishleft (242).png",
+        "fish/fishleft (243).png",
+        "fish/fishleft (244).png",
+        "fish/fishleft (245).png",
+        "fish/fishleft (246).png",
+        "fish/fishleft (247).png",
+        "fish/fishleft (248).png",
+        "fish/fishleft (249).png",
+        "fish/fishleft (25).png",
+        "fish/fishleft (250).png",
+        "fish/fishleft (251).png",
+        "fish/fishleft (252).png",
+        "fish/fishleft (253).png",
+        "fish/fishleft (254).png",
+        "fish/fishleft (255).png",
+        "fish/fishleft (256).png",
+        "fish/fishleft (257).png",
+        "fish/fishleft (258).png",
+        "fish/fishleft (259).png",
+        "fish/fishleft (26).png",
+        "fish/fishleft (260).png",
+        "fish/fishleft (261).png",
+        "fish/fishleft (262).png",
+        "fish/fishleft (263).png",
+        "fish/fishleft (264).png",
+        "fish/fishleft (265).png",
+        "fish/fishleft (266).png",
+        "fish/fishleft (267).png",
+        "fish/fishleft (268).png",
+        "fish/fishleft (269).png",
+        "fish/fishleft (27).png",
+        "fish/fishleft (270).png",
+        "fish/fishleft (271).png",
+        "fish/fishleft (272).png",
+        "fish/fishleft (273).png",
+        "fish/fishleft (274).png",
+        "fish/fishleft (275).png",
+        "fish/fishleft (276).png",
+        "fish/fishleft (277).png",
+        "fish/fishleft (278).png",
+        "fish/fishleft (279).png",
+        "fish/fishleft (28).png",
+        "fish/fishleft (280).png",
+        "fish/fishleft (281).png",
+        "fish/fishleft (282).png",
+        "fish/fishleft (283).png",
+        "fish/fishleft (284).png",
+        "fish/fishleft (285).png",
+        "fish/fishleft (286).png",
+        "fish/fishleft (287).png",
+        "fish/fishleft (288).png",
+        "fish/fishleft (289).png",
+        "fish/fishleft (29).png",
+        "fish/fishleft (290).png",
+        "fish/fishleft (291).png",
+        "fish/fishleft (292).png",
+        "fish/fishleft (293).png",
+        "fish/fishleft (294).png",
+        "fish/fishleft (295).png",
+        "fish/fishleft (296).png",
+        "fish/fishleft (297).png",
+        "fish/fishleft (298).png",
+        "fish/fishleft (299).png",
+        "fish/fishleft (3).png",
+        "fish/fishleft (30).png",
+        "fish/fishleft (300).png",
+        "fish/fishleft (301).png",
+        "fish/fishleft (302).png",
+        "fish/fishleft (303).png",
+        "fish/fishleft (304).png",
+        "fish/fishleft (305).png",
+        "fish/fishleft (306).png",
+        "fish/fishleft (307).png",
+        "fish/fishleft (308).png",
+        "fish/fishleft (309).png",
+        "fish/fishleft (31).png",
+        "fish/fishleft (310).png",
+        "fish/fishleft (311).png",
+        "fish/fishleft (312).png",
+        "fish/fishleft (313).png",
+        "fish/fishleft (314).png",
+        "fish/fishleft (315).png",
+        "fish/fishleft (316).png",
+        "fish/fishleft (317).png",
+        "fish/fishleft (318).png",
+        "fish/fishleft (319).png",
+        "fish/fishleft (32).png",
+        "fish/fishleft (320).png",
+        "fish/fishleft (321).png",
+        "fish/fishleft (322).png",
+        "fish/fishleft (323).png",
+        "fish/fishleft (324).png",
+        "fish/fishleft (325).png",
+        "fish/fishleft (326).png",
+        "fish/fishleft (327).png",
+        "fish/fishleft (328).png",
+        "fish/fishleft (329).png",
+        "fish/fishleft (33).png",
+        "fish/fishleft (330).png",
+        "fish/fishleft (331).png",
+        "fish/fishleft (332).png",
+        "fish/fishleft (333).png",
+        "fish/fishleft (334).png",
+        "fish/fishleft (335).png",
+        "fish/fishleft (336).png",
+        "fish/fishleft (337).png",
+        "fish/fishleft (338).png",
+        "fish/fishleft (339).png",
+        "fish/fishleft (34).png",
+        "fish/fishleft (340).png",
+        "fish/fishleft (341).png",
+        "fish/fishleft (342).png",
+        "fish/fishleft (343).png",
+        "fish/fishleft (344).png",
+        "fish/fishleft (345).png",
+        "fish/fishleft (346).png",
+        "fish/fishleft (347).png",
+        "fish/fishleft (348).png",
+        "fish/fishleft (349).png",
+        "fish/fishleft (35).png",
+        "fish/fishleft (350).png",
+        "fish/fishleft (351).png",
+        "fish/fishleft (352).png",
+        "fish/fishleft (353).png",
+        "fish/fishleft (354).png",
+        "fish/fishleft (355).png",
+        "fish/fishleft (356).png",
+        "fish/fishleft (357).png",
+        "fish/fishleft (358).png",
+        "fish/fishleft (359).png",
+        "fish/fishleft (36).png",
+        "fish/fishleft (360).png",
+        "fish/fishleft (361).png",
+        "fish/fishleft (362).png",
+        "fish/fishleft (363).png",
+        "fish/fishleft (364).png",
+        "fish/fishleft (365).png",
+        "fish/fishleft (366).png",
+        "fish/fishleft (367).png",
+        "fish/fishleft (368).png",
+        "fish/fishleft (369).png",
+        "fish/fishleft (37).png",
+        "fish/fishleft (370).png",
+        "fish/fishleft (371).png",
+        "fish/fishleft (372).png",
+        "fish/fishleft (373).png",
+        "fish/fishleft (374).png",
+        "fish/fishleft (375).png",
+        "fish/fishleft (376).png",
+        "fish/fishleft (377).png",
+        "fish/fishleft (378).png",
+        "fish/fishleft (379).png",
+        "fish/fishleft (38).png",
+        "fish/fishleft (380).png",
+        "fish/fishleft (381).png",
+        "fish/fishleft (382).png",
+        "fish/fishleft (383).png",
+        "fish/fishleft (384).png",
+        "fish/fishleft (385).png",
+        "fish/fishleft (386).png",
+        "fish/fishleft (387).png",
+        "fish/fishleft (388).png",
+        "fish/fishleft (389).png",
+        "fish/fishleft (39).png",
+        "fish/fishleft (390).png",
+        "fish/fishleft (391).png",
+        "fish/fishleft (392).png",
+        "fish/fishleft (393).png",
+        "fish/fishleft (394).png",
+        "fish/fishleft (395).png",
+        "fish/fishleft (396).png",
+        "fish/fishleft (397).png",
+        "fish/fishleft (398).png",
+        "fish/fishleft (399).png",
+        "fish/fishleft (4).png",
+        "fish/fishleft (40).png",
+        "fish/fishleft (400).png",
+        "fish/fishleft (401).png",
+        "fish/fishleft (402).png",
+        "fish/fishleft (403).png",
+        "fish/fishleft (404).png",
+        "fish/fishleft (405).png",
+        "fish/fishleft (406).png",
+        "fish/fishleft (407).png",
+        "fish/fishleft (408).png",
+        "fish/fishleft (409).png",
+        "fish/fishleft (41).png",
+        "fish/fishleft (410).png",
+        "fish/fishleft (411).png",
+        "fish/fishleft (412).png",
+        "fish/fishleft (413).png",
+        "fish/fishleft (414).png",
+        "fish/fishleft (415).png",
+        "fish/fishleft (416).png",
+        "fish/fishleft (417).png",
+        "fish/fishleft (418).png",
+        "fish/fishleft (419).png",
+        "fish/fishleft (42).png",
+        "fish/fishleft (420).png",
+        "fish/fishleft (421).png",
+        "fish/fishleft (422).png",
+        "fish/fishleft (423).png",
+        "fish/fishleft (424).png",
+        "fish/fishleft (425).png",
+        "fish/fishleft (426).png",
+        "fish/fishleft (427).png",
+        "fish/fishleft (428).png",
+        "fish/fishleft (429).png",
+        "fish/fishleft (43).png",
+        "fish/fishleft (430).png",
+        "fish/fishleft (431).png",
+        "fish/fishleft (432).png",
+        "fish/fishleft (433).png",
+        "fish/fishleft (434).png",
+        "fish/fishleft (435).png",
+        "fish/fishleft (436).png",
+        "fish/fishleft (437).png",
+        "fish/fishleft (438).png",
+        "fish/fishleft (439).png",
+        "fish/fishleft (44).png",
+        "fish/fishleft (440).png",
+        "fish/fishleft (441).png",
+        "fish/fishleft (442).png",
+        "fish/fishleft (443).png",
+        "fish/fishleft (444).png",
+        "fish/fishleft (445).png",
+        "fish/fishleft (446).png",
+        "fish/fishleft (447).png",
+        "fish/fishleft (448).png",
+        "fish/fishleft (449).png",
+        "fish/fishleft (45).png",
+        "fish/fishleft (450).png",
+        "fish/fishleft (451).png",
+        "fish/fishleft (452).png",
+        "fish/fishleft (453).png",
+        "fish/fishleft (454).png",
+        "fish/fishleft (455).png",
+        "fish/fishleft (456).png",
+        "fish/fishleft (457).png",
+        "fish/fishleft (458).png",
+        "fish/fishleft (459).png",
+        "fish/fishleft (46).png",
+        "fish/fishleft (460).png",
+        "fish/fishleft (461).png",
+        "fish/fishleft (462).png",
+        "fish/fishleft (463).png",
+        "fish/fishleft (464).png",
+        "fish/fishleft (465).png",
+        "fish/fishleft (466).png",
+        "fish/fishleft (467).png",
+        "fish/fishleft (468).png",
+        "fish/fishleft (469).png",
+        "fish/fishleft (47).png",
+        "fish/fishleft (470).png",
+        "fish/fishleft (471).png",
+        "fish/fishleft (472).png",
+        "fish/fishleft (473).png",
+        "fish/fishleft (474).png",
+        "fish/fishleft (475).png",
+        "fish/fishleft (476).png",
+        "fish/fishleft (477).png",
+        "fish/fishleft (478).png",
+        "fish/fishleft (479).png",
+        "fish/fishleft (48).png",
+        "fish/fishleft (480).png",
+        "fish/fishleft (481).png",
+        "fish/fishleft (482).png",
+        "fish/fishleft (483).png",
+        "fish/fishleft (484).png",
+        "fish/fishleft (485).png",
+        "fish/fishleft (486).png",
+        "fish/fishleft (487).png",
+        "fish/fishleft (488).png",
+        "fish/fishleft (489).png",
+        "fish/fishleft (49).png",
+        "fish/fishleft (490).png",
+        "fish/fishleft (491).png",
+        "fish/fishleft (492).png",
+        "fish/fishleft (493).png",
+        "fish/fishleft (494).png",
+        "fish/fishleft (495).png",
+        "fish/fishleft (496).png",
+        "fish/fishleft (497).png",
+        "fish/fishleft (498).png",
+        "fish/fishleft (499).png",
+        "fish/fishleft (5).png",
+        "fish/fishleft (50).png",
+        "fish/fishleft (500).png",
+        "fish/fishleft (501).png",
+        "fish/fishleft (502).png",
+        "fish/fishleft (503).png",
+        "fish/fishleft (504).png",
+        "fish/fishleft (505).png",
+        "fish/fishleft (506).png",
+        "fish/fishleft (507).png",
+        "fish/fishleft (508).png",
+        "fish/fishleft (509).png",
+        "fish/fishleft (51).png",
+        "fish/fishleft (510).png",
+        "fish/fishleft (511).png",
+        "fish/fishleft (512).png",
+        "fish/fishleft (513).png",
+        "fish/fishleft (514).png",
+        "fish/fishleft (515).png",
+        "fish/fishleft (516).png",
+        "fish/fishleft (517).png",
+        "fish/fishleft (518).png",
+        "fish/fishleft (519).png",
+        "fish/fishleft (52).png",
+        "fish/fishleft (520).png",
+        "fish/fishleft (521).png",
+        "fish/fishleft (522).png",
+        "fish/fishleft (523).png",
+        "fish/fishleft (524).png",
+        "fish/fishleft (525).png",
+        "fish/fishleft (526).png",
+        "fish/fishleft (527).png",
+        "fish/fishleft (528).png",
+        "fish/fishleft (529).png",
+        "fish/fishleft (53).png",
+        "fish/fishleft (530).png",
+        "fish/fishleft (531).png",
+        "fish/fishleft (532).png",
+        "fish/fishleft (533).png",
+        "fish/fishleft (534).png",
+        "fish/fishleft (535).png",
+        "fish/fishleft (536).png",
+        "fish/fishleft (537).png",
+        "fish/fishleft (538).png",
+        "fish/fishleft (539).png",
+        "fish/fishleft (54).png",
+        "fish/fishleft (540).png",
+        "fish/fishleft (541).png",
+        "fish/fishleft (542).png",
+        "fish/fishleft (543).png",
+        "fish/fishleft (544).png",
+        "fish/fishleft (545).png",
+        "fish/fishleft (546).png",
+        "fish/fishleft (547).png",
+        "fish/fishleft (548).png",
+        "fish/fishleft (549).png",
+        "fish/fishleft (55).png",
+        "fish/fishleft (550).png",
+        "fish/fishleft (551).png",
+        "fish/fishleft (552).png",
+        "fish/fishleft (553).png",
+        "fish/fishleft (554).png",
+        "fish/fishleft (555).png",
+        "fish/fishleft (556).png",
+        "fish/fishleft (557).png",
+        "fish/fishleft (558).png",
+        "fish/fishleft (559).png",
+        "fish/fishleft (56).png",
+        "fish/fishleft (560).png",
+        "fish/fishleft (561).png",
+        "fish/fishleft (562).png",
+        "fish/fishleft (563).png",
+        "fish/fishleft (564).png",
+        "fish/fishleft (565).png",
+        "fish/fishleft (566).png",
+        "fish/fishleft (567).png",
+        "fish/fishleft (568).png",
+        "fish/fishleft (569).png",
+        "fish/fishleft (57).png",
+        "fish/fishleft (570).png",
+        "fish/fishleft (571).png",
+        "fish/fishleft (572).png",
+        "fish/fishleft (573).png",
+        "fish/fishleft (574).png",
+        "fish/fishleft (575).png",
+        "fish/fishleft (576).png",
+        "fish/fishleft (577).png",
+        "fish/fishleft (578).png",
+        "fish/fishleft (579).png",
+        "fish/fishleft (58).png",
+        "fish/fishleft (580).png",
+        "fish/fishleft (581).png",
+        "fish/fishleft (582).png",
+        "fish/fishleft (583).png",
+        "fish/fishleft (584).png",
+        "fish/fishleft (585).png",
+        "fish/fishleft (586).png",
+        "fish/fishleft (587).png",
+        "fish/fishleft (588).png",
+        "fish/fishleft (589).png",
+        "fish/fishleft (59).png",
+        "fish/fishleft (590).png",
+        "fish/fishleft (591).png",
+        "fish/fishleft (592).png",
+        "fish/fishleft (593).png",
+        "fish/fishleft (594).png",
+        "fish/fishleft (595).png",
+        "fish/fishleft (596).png",
+        "fish/fishleft (597).png",
+        "fish/fishleft (598).png",
+        "fish/fishleft (599).png",
+        "fish/fishleft (6).png",
+        "fish/fishleft (60).png",
+        "fish/fishleft (600).png",
+        "fish/fishleft (601).png",
+        "fish/fishleft (602).png",
+        "fish/fishleft (603).png",
+        "fish/fishleft (604).png",
+        "fish/fishleft (605).png",
+        "fish/fishleft (606).png",
+        "fish/fishleft (607).png",
+        "fish/fishleft (608).png",
+        "fish/fishleft (609).png",
+        "fish/fishleft (61).png",
+        "fish/fishleft (610).png",
+        "fish/fishleft (611).png",
+        "fish/fishleft (612).png",
+        "fish/fishleft (613).png",
+        "fish/fishleft (614).png",
+        "fish/fishleft (615).png",
+        "fish/fishleft (616).png",
+        "fish/fishleft (617).png",
+        "fish/fishleft (618).png",
+        "fish/fishleft (619).png",
+        "fish/fishleft (62).png",
+        "fish/fishleft (620).png",
+        "fish/fishleft (621).png",
+        "fish/fishleft (622).png",
+        "fish/fishleft (623).png",
+        "fish/fishleft (624).png",
+        "fish/fishleft (625).png",
+        "fish/fishleft (626).png",
+        "fish/fishleft (627).png",
+        "fish/fishleft (628).png",
+        "fish/fishleft (629).png",
+        "fish/fishleft (63).png",
+        "fish/fishleft (630).png",
+        "fish/fishleft (631).png",
+        "fish/fishleft (632).png",
+        "fish/fishleft (633).png",
+        "fish/fishleft (634).png",
+        "fish/fishleft (635).png",
+        "fish/fishleft (636).png",
+        "fish/fishleft (637).png",
+        "fish/fishleft (638).png",
+        "fish/fishleft (639).png",
+        "fish/fishleft (64).png",
+        "fish/fishleft (640).png",
+        "fish/fishleft (641).png",
+        "fish/fishleft (642).png",
+        "fish/fishleft (643).png",
+        "fish/fishleft (644).png",
+        "fish/fishleft (645).png",
+        "fish/fishleft (646).png",
+        "fish/fishleft (647).png",
+        "fish/fishleft (648).png",
+        "fish/fishleft (649).png",
+        "fish/fishleft (65).png",
+        "fish/fishleft (650).png",
+        "fish/fishleft (651).png",
+        "fish/fishleft (652).png",
+        "fish/fishleft (653).png",
+        "fish/fishleft (654).png",
+        "fish/fishleft (655).png",
+        "fish/fishleft (656).png",
+        "fish/fishleft (657).png",
+        "fish/fishleft (658).png",
+        "fish/fishleft (659).png",
+        "fish/fishleft (66).png",
+        "fish/fishleft (660).png",
+        "fish/fishleft (661).png",
+        "fish/fishleft (662).png",
+        "fish/fishleft (663).png",
+        "fish/fishleft (664).png",
+        "fish/fishleft (665).png",
+        "fish/fishleft (666).png",
+        "fish/fishleft (667).png",
+        "fish/fishleft (668).png",
+        "fish/fishleft (669).png",
+        "fish/fishleft (67).png",
+        "fish/fishleft (670).png",
+        "fish/fishleft (671).png",
+        "fish/fishleft (672).png",
+        "fish/fishleft (673).png",
+        "fish/fishleft (674).png",
+        "fish/fishleft (675).png",
+        "fish/fishleft (676).png",
+        "fish/fishleft (677).png",
+        "fish/fishleft (678).png",
+        "fish/fishleft (679).png",
+        "fish/fishleft (68).png",
+        "fish/fishleft (680).png",
+        "fish/fishleft (681).png",
+        "fish/fishleft (682).png",
+        "fish/fishleft (683).png",
+        "fish/fishleft (684).png",
+        "fish/fishleft (685).png",
+        "fish/fishleft (686).png",
+        "fish/fishleft (687).png",
+        "fish/fishleft (688).png",
+        "fish/fishleft (689).png",
+        "fish/fishleft (69).png",
+        "fish/fishleft (690).png",
+        "fish/fishleft (691).png",
+        "fish/fishleft (692).png",
+        "fish/fishleft (693).png",
+        "fish/fishleft (694).png",
+        "fish/fishleft (695).png",
+        "fish/fishleft (696).png",
+        "fish/fishleft (697).png",
+        "fish/fishleft (698).png",
+        "fish/fishleft (699).png",
+        "fish/fishleft (7).png",
+        "fish/fishleft (70).png",
+        "fish/fishleft (700).png",
+        "fish/fishleft (701).png",
+        "fish/fishleft (702).png",
+        "fish/fishleft (703).png",
+        "fish/fishleft (704).png",
+        "fish/fishleft (705).png",
+        "fish/fishleft (706).png",
+        "fish/fishleft (707).png",
+        "fish/fishleft (708).png",
+        "fish/fishleft (709).png",
+        "fish/fishleft (71).png",
+        "fish/fishleft (710).png",
+        "fish/fishleft (711).png",
+        "fish/fishleft (712).png",
+        "fish/fishleft (713).png",
+        "fish/fishleft (714).png",
+        "fish/fishleft (715).png",
+        "fish/fishleft (716).png",
+        "fish/fishleft (717).png",
+        "fish/fishleft (718).png",
+        "fish/fishleft (719).png",
+        "fish/fishleft (72).png",
+        "fish/fishleft (720).png",
+        "fish/fishleft (721).png",
+        "fish/fishleft (722).png",
+        "fish/fishleft (723).png",
+        "fish/fishleft (724).png",
+        "fish/fishleft (725).png",
+        "fish/fishleft (726).png",
+        "fish/fishleft (727).png",
+        "fish/fishleft (728).png",
+        "fish/fishleft (729).png",
+        "fish/fishleft (73).png",
+        "fish/fishleft (730).png",
+        "fish/fishleft (731).png",
+        "fish/fishleft (732).png",
+        "fish/fishleft (733).png",
+        "fish/fishleft (734).png",
+        "fish/fishleft (735).png",
+        "fish/fishleft (736).png",
+        "fish/fishleft (737).png",
+        "fish/fishleft (738).png",
+        "fish/fishleft (739).png",
+        "fish/fishleft (74).png",
+        "fish/fishleft (740).png",
+        "fish/fishleft (741).png",
+        "fish/fishleft (742).png",
+        "fish/fishleft (743).png",
+        "fish/fishleft (744).png",
+        "fish/fishleft (745).png",
+        "fish/fishleft (746).png",
+        "fish/fishleft (747).png",
+        "fish/fishleft (748).png",
+        "fish/fishleft (749).png",
+        "fish/fishleft (75).png",
+        "fish/fishleft (750).png",
+        "fish/fishleft (751).png",
+        "fish/fishleft (752).png",
+        "fish/fishleft (753).png",
+        "fish/fishleft (754).png",
+        "fish/fishleft (755).png",
+        "fish/fishleft (756).png",
+        "fish/fishleft (757).png",
+        "fish/fishleft (758).png",
+        "fish/fishleft (759).png",
+        "fish/fishleft (76).png",
+        "fish/fishleft (760).png",
+        "fish/fishleft (761).png",
+        "fish/fishleft (762).png",
+        "fish/fishleft (763).png",
+        "fish/fishleft (764).png",
+        "fish/fishleft (765).png",
+        "fish/fishleft (766).png",
+        "fish/fishleft (767).png",
+        "fish/fishleft (768).png",
+        "fish/fishleft (769).png",
+        "fish/fishleft (77).png",
+        "fish/fishleft (770).png",
+        "fish/fishleft (771).png",
+        "fish/fishleft (772).png",
+        "fish/fishleft (773).png",
+        "fish/fishleft (774).png",
+        "fish/fishleft (775).png",
+        "fish/fishleft (776).png",
+        "fish/fishleft (777).png",
+        "fish/fishleft (778).png",
+        "fish/fishleft (779).png",
+        "fish/fishleft (78).png",
+        "fish/fishleft (780).png",
+        "fish/fishleft (781).png",
+        "fish/fishleft (782).png",
+        "fish/fishleft (783).png",
+        "fish/fishleft (784).png",
+        "fish/fishleft (785).png",
+        "fish/fishleft (786).png",
+        "fish/fishleft (787).png",
+        "fish/fishleft (788).png",
+        "fish/fishleft (789).png",
+        "fish/fishleft (79).png",
+        "fish/fishleft (790).png",
+        "fish/fishleft (791).png",
+        "fish/fishleft (792).png",
+        "fish/fishleft (793).png",
+        "fish/fishleft (794).png",
+        "fish/fishleft (795).png",
+        "fish/fishleft (796).png",
+        "fish/fishleft (797).png",
+        "fish/fishleft (798).png",
+        "fish/fishleft (799).png",
+        "fish/fishleft (8).png",
+        "fish/fishleft (80).png",
+        "fish/fishleft (800).png",
+        "fish/fishleft (801).png",
+        "fish/fishleft (802).png",
+        "fish/fishleft (803).png",
+        "fish/fishleft (804).png",
+        "fish/fishleft (805).png",
+        "fish/fishleft (806).png",
+        "fish/fishleft (807).png",
+        "fish/fishleft (808).png",
+        "fish/fishleft (809).png",
+        "fish/fishleft (81).png",
+        "fish/fishleft (810).png",
+        "fish/fishleft (811).png",
+        "fish/fishleft (82).png",
+        "fish/fishleft (83).png",
+        "fish/fishleft (84).png",
+        "fish/fishleft (85).png",
+        "fish/fishleft (86).png",
+        "fish/fishleft (87).png",
+        "fish/fishleft (88).png",
+        "fish/fishleft (89).png",
+        "fish/fishleft (9).png",
+        "fish/fishleft (90).png",
+        "fish/fishleft (91).png",
+        "fish/fishleft (92).png",
+        "fish/fishleft (93).png",
+        "fish/fishleft (94).png",
+        "fish/fishleft (95).png",
+        "fish/fishleft (96).png",
+        "fish/fishleft (97).png",
+        "fish/fishleft (98).png",
+        "fish/fishleft (99).png"
+      ];
+      // --- END: HARD-CODED FILE LISTS ---
+
+
+      // DOM Elements
+      const initialControls = document.getElementById('initial-controls');
+      const startBtn = document.getElementById('start-btn');
+      const highScoresList = document.getElementById('score-list');
+      const nameInputModal = document.getElementById('name-input-modal');
+      const initialsInput = document.getElementById('initials-input');
+      const submitScoreBtn = document.getElementById('submit-score-btn');
+      const introVideo = document.getElementById('intro-video');
+      const titlePage = document.getElementById('title-page');
+      const skipPrompt = document.getElementById('skip-prompt');
+      const gameContainer = document.getElementById('game-container');
+      const objectGrid = document.getElementById('object-grid');
+      const gameControls = document.getElementById('game-controls');
+      const mistakeCounter = document.getElementById('mistake-counter');
+      const hintCounter = document.getElementById('hint-counter');
+      const timerDisplay = document.getElementById('timer');
+      const bonusUI = document.getElementById('bonus-ui');
+      const fullscreenBtn = document.getElementById('fullscreen-btn');
+      const shuffleBgBtn = document.getElementById('shuffle-bg');
+      const shuffleObjBtn = document.getElementById('shuffle-obj');
+      const shuffleBothBtn = document.getElementById('shuffle-both');
+
+      // Audio Elements
+      const soundFound = document.getElementById('sound-found');
+      const soundMistake = document.getElementById('sound-mistake');
+      const soundWin = document.getElementById('sound-win');
+
+      // Game State
+      let bgFiles = [], objFiles = [], decoyFiles = [], videoFiles = [];
+      let availableObjIndexes = [];
+      const objectsPerRound = 10, decoysPerRound = 15, mistakesAllowed = 5;
+      let mistakeCount = 0;
+      let timerInterval;
+      let secondsElapsed = 0;
+      let currentScoreCallback = null;
+      let hintCount = 0;
+      let levelCount = 0;
+      let isBonusRound = false;
+
+      const winMessages = ["Great Job!", "Awesome!", "Level Complete!", "You're a Star!", "On to the Next!"];
+
+      // --- HELPER FUNCTIONS ---
+      function playSound(soundElement) {
+        soundElement.currentTime = 0;
+        soundElement.play().catch(e => console.log("Sound play failed:", e));
+      }
+
+      function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+      }
+      function goFullscreen() {
+        const docElm = document.documentElement;
+        if (docElm.requestFullscreen) docElm.requestFullscreen();
+        else if (docElm.webkitRequestFullscreen) docElm.webkitRequestFullscreen();
+      }
+
+      function getRoundHiddenObjects() {
+        if (availableObjIndexes.length < objectsPerRound) {
+          availableObjIndexes = objFiles.map((_, i) => i);
+          shuffleArray(availableObjIndexes);
+        }
+        const roundFiles = [];
+        for (let i = 0; i < objectsPerRound; i++) {
+          if (availableObjIndexes.length > 0) {
+            roundFiles.push(objFiles[availableObjIndexes.pop()]);
+          }
+        }
+        return roundFiles;
+      }
+      function getDecoyObjects() {
+        shuffleArray(decoyFiles);
+        return decoyFiles.slice(0, decoysPerRound);
+      }
+      
+      // --- TIMER & HIGH SCORE FUNCTIONS ---
+      function startTimer() {
+        stopTimer();
+        secondsElapsed = 0;
+        timerDisplay.textContent = `Time: ${secondsElapsed}s`;
+        timerInterval = setInterval(() => {
+          secondsElapsed++;
+          timerDisplay.textContent = `Time: ${secondsElapsed}s`;
+        }, 1000);
+      }
+      function stopTimer() { clearInterval(timerInterval); }
+      function getHighScores() { return JSON.parse(localStorage.getItem('hiddenObjectHighScores')) || []; }
+      function saveHighScores(scores) {
+        scores.sort((a, b) => a.time - b.time);
+        const top10 = scores.slice(0, 10);
+        localStorage.setItem('hiddenObjectHighScores', JSON.stringify(top10));
+        displayHighScores();
+      }
+      function displayHighScores() {
+        const scores = getHighScores();
+        highScoresList.innerHTML = scores.map(s => `<li><span>${s.name}</span> ${s.time}s</li>`).join('');
+        if (scores.length === 0) highScoresList.innerHTML = '<li>No scores yet!</li>';
+      }
+      function checkHighScore(time, onComplete) {
+        const scores = getHighScores();
+        if (scores.length < 10 || time < scores[scores.length - 1].time) {
+          nameInputModal.style.display = 'block';
+          initialsInput.focus();
+          currentScoreCallback = () => {
+            const name = initialsInput.value.trim().toUpperCase() || '???';
+            scores.push({ name, time });
+            saveHighScores(scores);
+            nameInputModal.style.display = 'none';
+            initialsInput.value = '';
+            onComplete();
+          };
+        } else {
+          onComplete();
+        }
+      }
+      
+      // --- CORE GAME FLOW FUNCTIONS ---
+      function playInterludeVideo(callback) {
+        if (videoFiles.length > 0) {
+          let hasFinished = false;
+          const finishVideo = () => {
+            if (hasFinished) return;
+            hasFinished = true;
+            introVideo.style.display = 'none'; introVideo.pause();
+            document.removeEventListener('keydown', handleSkipKey);
+            callback();
+          };
+          const handleSkipKey = (e) => { if (e.code === 'Space') { e.preventDefault(); finishVideo(); } };
+          const videoUrl = shuffleArray(videoFiles)[0]; // Changed
+          introVideo.src = videoUrl; introVideo.style.display = 'block';
+          introVideo.onended = finishVideo;
+          introVideo.onerror = (e) => {
+            console.error("Video Error:", e); alert("Could not play the selected video file. Skipping.");
+            finishVideo();
+          };
+          document.addEventListener('keydown', handleSkipKey);
+          const playPromise = introVideo.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(error => {
+              console.error("Video Autoplay Error:", error); alert("Video could not autoplay. Skipping.");
+              finishVideo();
+            });
+          }
+        } else {
+          callback();
+        }
+      }
+
+      function showTitlePage(message, callback, showSkip = false) {
+        titlePage.querySelector('h1').textContent = message;
+        skipPrompt.textContent = showSkip ? "Press Space to Skip" : "";
+        titlePage.style.display = 'flex';
+        setTimeout(() => {
+          titlePage.style.display = 'none';
+          callback();
+        }, 2500);
+      }
+
+      function setRandomBackground() {
+        if (bgFiles.length === 0) return;
+        const randomBgFile = bgFiles[Math.floor(Math.random() * bgFiles.length)];
+        gameContainer.style.backgroundImage = `url('${randomBgFile}')`; // Changed
+      }
+      function updateMistakeCounter() {
+        mistakeCounter.textContent = `Mistakes: ${mistakeCount}/${mistakesAllowed}`;
+        mistakeCounter.style.color = (mistakeCount >= mistakesAllowed) ? '#ff4d4d' : '#ffeb3b';
+      }
+      function updateHintCounter() {
+        hintCounter.textContent = `Hints: ${hintCount}`;
+        objectGrid.classList.toggle('hints-available', hintCount > 0);
+      }
+      function handleMistake(e) {
+        if (isBonusRound || mistakeCount >= mistakesAllowed) return;
+        playSound(soundMistake);
+        
+        const x = document.createElement('div');
+        x.classList.add('mistake-x');
+        x.innerHTML = `X <span class="mistake-text">${mistakesAllowed - (mistakeCount + 1)} left</span>`;
+        x.style.left = `${e.clientX - gameContainer.getBoundingClientRect().left}px`;
+        x.style.top = `${e.clientY - gameContainer.getBoundingClientRect().top}px`;
+        gameContainer.appendChild(x);
+        setTimeout(() => x.remove(), 1000);
+
+        mistakeCount++;
+        updateMistakeCounter();
+        if (mistakeCount >= mistakesAllowed) {
+            stopTimer();
+            setTimeout(() => {
+                alert("Game Over! Too many mistakes. Starting a new round.");
+                loadNewRound();
+            }, 100);
+        }
+      }
+
+      function placeObjectsAndGrid() {
+        isBonusRound = false;
+        document.querySelectorAll('.placed-object, .mistake-x').forEach(el => el.remove());
+        objectGrid.innerHTML = '';
+        mistakeCount = 0;
+        updateMistakeCounter();
+        updateHintCounter();
+        startTimer();
+
+        const realObjFiles = getRoundHiddenObjects();
+        const decoyObjFiles = getDecoyObjects();
+        
+        let objectsToPlace = [
+            ...realObjFiles.map(path => ({ path, isReal: true, filename: path.split('/').pop() })),
+            ...decoyObjFiles.map(path => ({ path, isReal: false, filename: path.split('/').pop() }))
+        ];
+        shuffleArray(objectsToPlace);
+
+        const containerRect = gameContainer.getBoundingClientRect();
+        const safeHeight = containerRect.height - 150;
+        let foundCount = 0;
+
+        function checkRoundComplete() {
+          if (foundCount >= realObjFiles.length) {
+            stopTimer();
+            playSound(soundWin);
+            levelCount++;
+            hintCount++;
+            updateHintCounter();
+            
+            const roundCompleteContinuation = () => {
+              if (levelCount % 3 === 0) {
+                 startBonusRound();
+              } else {
+                const randomMessage = winMessages[Math.floor(Math.random() * winMessages.length)];
+                showTitlePage(randomMessage, () => playInterludeVideo(loadNewRound));
+              }
+            };
+            checkHighScore(secondsElapsed, roundCompleteContinuation);
+          }
+        }
+
+        objectsToPlace.forEach(obj => {
+          const imgElem = document.createElement('img');
+          imgElem.src = obj.path; // Changed
+          imgElem.classList.add('placed-object');
+          imgElem.dataset.filename = obj.filename;
+          
+          const maxX = containerRect.width - 100;
+          const maxY = safeHeight - 100;
+          imgElem.style.left = `${Math.floor(Math.random() * (maxX > 0 ? maxX : 1))}px`;
+          imgElem.style.top = `${Math.floor(Math.random() * (maxY > 0 ? maxY : 1))}px`;
+          
+          imgElem.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (imgElem.classList.contains('found-animated')) return;
+            if (obj.isReal) {
+              playSound(soundFound);
+              imgElem.classList.add('found-animated');
+              
+              const gridItem = document.querySelector(`.grid-item[data-filename="${obj.filename}"]`);
+              if (gridItem && !gridItem.querySelector('.found-overlay')) {
+                  const overlay = document.createElement('span');
+                  overlay.classList.add('found-overlay');
+                  overlay.textContent = "X";
+                  gridItem.appendChild(overlay);
+              }
+              foundCount++;
+              setTimeout(checkRoundComplete, 500);
+            } else {
+              handleMistake(e);
+            }
+          });
+          gameContainer.appendChild(imgElem);
+        });
+
+        realObjFiles.forEach(objPath => {
+            const gridItem = document.createElement('div');
+            gridItem.classList.add('grid-item');
+            const filename = objPath.split('/').pop();
+            gridItem.dataset.filename = filename;
+            const gridImg = document.createElement('img');
+            gridImg.src = objPath; // Changed
+            gridItem.appendChild(gridImg);
+            gridItem.addEventListener('click', () => {
+                if (hintCount > 0 && !gridItem.querySelector('.found-overlay')) {
+                    hintCount--;
+                    updateHintCounter();
+                    const targetObject = document.querySelector(`.placed-object[data-filename="${filename}"]`);
+                    if (targetObject) targetObject.click();
+                }
+            });
+            objectGrid.appendChild(gridItem);
+        });
+      }
+
+      function startBonusRound() {
+        showTitlePage("BONUS ROUND!", () => {
+            isBonusRound = true;
+            document.querySelectorAll('.placed-object').forEach(el => el.remove());
+            objectGrid.innerHTML = '';
+            setRandomBackground();
+
+            const bonusObjectPath = objFiles[Math.floor(Math.random() * objFiles.length)]; // Changed
+            let bonusFoundCount = 0;
+            
+            bonusUI.innerHTML = `Find as many <img src="${bonusObjectPath}"> as you can!`; // Changed
+            bonusUI.style.display = 'block';
+            mistakeCounter.style.display = 'none';
+
+            const containerRect = gameContainer.getBoundingClientRect();
+            const safeHeight = containerRect.height - 150;
+
+            for (let i = 0; i < 30; i++) {
+                const imgElem = document.createElement('img');
+                imgElem.src = bonusObjectPath; // Changed
+                imgElem.classList.add('placed-object');
+                const maxX = containerRect.width - 100;
+                const maxY = safeHeight - 100;
+                imgElem.style.left = `${Math.floor(Math.random() * (maxX > 0 ? maxX : 1))}px`;
+                imgElem.style.top = `${Math.floor(Math.random() * (maxY > 0 ? maxY : 1))}px`;
+                imgElem.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (imgElem.classList.contains('found-animated')) return;
+                    playSound(soundFound);
+                    bonusFoundCount++;
+                    imgElem.classList.add('found-animated');
+                    bonusUI.innerHTML = `Found: ${bonusFoundCount}`;
+                });
+                gameContainer.appendChild(imgElem);
+            }
+
+            let bonusTime = 30;
+            timerDisplay.textContent = `Time: ${bonusTime}s`;
+            const bonusTimer = setInterval(() => {
+                bonusTime--;
+                timerDisplay.textContent = `Time: ${bonusTime}s`;
+                if (bonusTime <= 0) {
+                    clearInterval(bonusTimer);
+                    endBonusRound(bonusFoundCount);
+                }
+            }, 1000);
+        });
+      }
+
+      function endBonusRound(foundCount) {
+        bonusUI.style.display = 'none';
+        mistakeCounter.style.display = 'flex';
+        playSound(soundWin);
+        showTitlePage(`You found ${foundCount} items!`, () => {
+            playInterludeVideo(loadNewRound);
+        });
+      }
+      
+      function loadNewRound() { setRandomBackground(); placeObjectsAndGrid(); }
+      
+      // --- EVENT LISTENERS ---
+      
+      startBtn.addEventListener('click', () => {
+        // Load files from the hard-coded arrays
+        bgFiles = backgroundPaths;
+        objFiles = fishPaths;
+        decoyFiles = fishPaths; // Using fish for decoys as well
+        videoFiles = videoPaths;
+
+        if (bgFiles.length === 0 || objFiles.length < objectsPerRound || decoyFiles.length < decoysPerRound) {
+          alert(`Error: Not enough assets were hard-coded.\n- Need at least 1 Background Image\n- Need at least ${objectsPerRound} Hidden Object Images\n- Need at least ${decoysPerRound} Decoy Images`);
+          return;
+        }
+        availableObjIndexes = objFiles.map((_, i) => i);
+        shuffleArray(availableObjIndexes);
+        levelCount = 0;
+        hintCount = 0;
+
+        initialControls.style.display = 'none';
+        goFullscreen();
+
+        playInterludeVideo(() => {
+          showTitlePage("Hidden Object Adventure Pro", loadNewRound, true);
+        });
+      });
+
+      submitScoreBtn.addEventListener('click', () => { if (currentScoreCallback) currentScoreCallback(); });
+      initialsInput.addEventListener('keyup', (e) => { if (e.key === 'Enter' && currentScoreCallback) currentScoreCallback(); });
+      gameContainer.addEventListener('click', (e) => { if (e.target === gameContainer) handleMistake(e); });
+      
+      fullscreenBtn.addEventListener('click', goFullscreen);
+      shuffleBgBtn.addEventListener('click', setRandomBackground);
+      shuffleObjBtn.addEventListener('click', placeObjectsAndGrid);
+      shuffleBothBtn.addEventListener('click', loadNewRound);
+      
+      // Initialize
+      displayHighScores();
+    })();
+  </script>
+</body>
+</html>
